@@ -115,7 +115,8 @@ def update(frame):
 
     # Update legend elements for interactions
     legend_elements[-2].set_label(f'Interactions: {interaction_counter}')
-
+    legend_elements[-1].set_label(f'Iterations: {iteration_counter}')
+    
     # Update legend
     legend = ax.legend(handles=legend_elements, loc='upper left', title='Dot Legend')
 
