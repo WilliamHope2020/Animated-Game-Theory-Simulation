@@ -39,7 +39,6 @@ def update(frame):
     
     iteration_counter += 1
     
-    # Check if a new dot spawns
     # Check if a new dot spawns (up to 10 dots)
     if num_dots < 10 and np.random.rand() < new_dot_probability:
         num_dots += 1
