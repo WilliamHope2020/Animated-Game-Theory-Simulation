@@ -2,206 +2,310 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from matplotlib.lines import Line2D
+import logging
+import random
 
-# Define parameters
-num_dots = 4
-box_size = 3
-speed = 0.1
-interaction_distance = 0.2
-dot_sizes = np.random.randint(10, 25, size=num_dots)  # Random initial dot sizes
-dot_colors = np.random.rand(num_dots, 3)  # Random colors for each dot
-dot_strategies = np.random.choice([0, 1], size=num_dots)  # 0 for cooperate, 1 for defect
-dot_memory = np.zeros((num_dots, num_dots))  # Memory of past interactions
-interaction_counter = 0 # interactions (based on number of times dots interact/play games)
-iteration_counter = 0 # iterations (based on number of loops executed)
-new_dot_probability = 0.05  # Probability of a new dot spawning
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Initialize dot positions
-dot_positions = np.random.rand(num_dots, 2) * box_size
+# Define learning algorithms as classes
+class TitForTat:
+    def __init__(self):
+        self.cooperate = True
 
-# Initialize the plot
-fig, ax = plt.subplots()
-ax.set_xlim(0, box_size)
-ax.set_ylim(0, box_size)
-dots = ax.scatter(dot_positions[:, 0], dot_positions[:, 1], c=dot_colors)
+    def play(self, opponent_cooperate):
+        return self.cooperate
 
-# Initialize legend elements and labels
-legend_elements = [Line2D([0], [0], marker='o', color='w', label=f'Dot {i+1}: Size {dot_sizes[i]}' if dot_sizes[i] > 0 else 'Defeated', markerfacecolor=dot_colors[i], markersize=np.sqrt(dot_sizes[i])) for i in range(num_dots)]
-legend_elements.append(Line2D([0], [0], color='w', lw=1, label=f'Interactions: {interaction_counter}')) # add legend element for interaction counter
-legend_elements.append(Line2D([0], [0], color='w', lw=1, label=f'Iterations: {iteration_counter}')) # add legend element for iteration counter
-legend_elements.append(Line2D([0], [0], color='w', lw=1, label=f'Total Value: {sum(dot_sizes)}'))  # Add legend element for total value
+    def update(self, opponent_cooperate):
+        self.cooperate = opponent_cooperate
 
-# Initialize legend
-legend = ax.legend(handles=legend_elements, loc='upper left', title='Dot Legend')
+class RandomPlay:
+    def __init__(self):
+        pass
 
-# Function to remove defeated dots from the legend
-def remove_defeated_dots():
-    global legend_elements
-    defeated_indices = np.where(dot_sizes == 0)[0]
-    if len(defeated_indices) > 0:
-        for idx in defeated_indices:
-            dot_label = f'Dot {idx + 1}: Size {dot_sizes[idx]}' if dot_sizes[idx] > 0 else 'Defeated'
-            dot_index = next((i for i, handle in enumerate(legend_elements) if handle.get_label() == dot_label), None)
-            if dot_index is not None:
-                legend_elements.pop(dot_index)
+    def play(self):
+        return random.choice([True, False])
 
-# Function to update dot positions and play the game
-def update(frame):
-    global dot_sizes, dot_positions, dot_strategies, dot_memory, legend_elements, interaction_counter, iteration_counter, num_dots, dot_colors
-    
-    iteration_counter += 1
-    
-    # Check if a new dot spawns (up to 10 dots)
-    if num_dots < 10 and np.random.rand() < new_dot_probability:
-        num_dots += 1
-        dot_sizes = np.append(dot_sizes, np.random.randint(10, 25))
-        dot_colors = np.vstack([dot_colors, np.random.rand(1, 3)])
-        dot_strategies = np.append(dot_strategies, np.random.choice([0, 1]))
-        dot_memory = np.pad(dot_memory, ((0, 1), (0, 1)), mode='constant')  # Expand dot_memory
-        dot_positions = np.vstack([dot_positions, np.random.rand(1, 2) * box_size])
-        new_dot_number = num_dots
-        new_dot_label = f'Dot {new_dot_number}: Size {dot_sizes[-1]}'
-        new_dot_handle = Line2D([0], [0], marker='o', color='w', label=new_dot_label, markerfacecolor=dot_colors[-1], markersize=5)
-        # Find indices of interaction and iteration counters in legend elements
-        interaction_index = [i for i, handle in enumerate(legend_elements) if handle.get_label().startswith('Interactions')][0]
-        # Insert new dot legend just above interaction and iteration counters
-        legend_elements.insert(interaction_index, new_dot_handle)
+    def update(self, opponent_cooperate):
+        pass
 
-    remove_defeated_dots()  # Remove defeated dots from legend
+class Pavlov:
+    def __init__(self):
+        self.cooperate = True
 
-    for i in range(num_dots):
-        # Move each dot randomly
-        dot_positions[i] += np.random.uniform(-speed, speed, size=2)
-        
-        # Keep dots inside the box
-        dot_positions[i] = np.clip(dot_positions[i], 0, box_size)
-    
-    i = 0  # Initialize loop index
-    while i < num_dots:
-        j = i + 1
-        while j < num_dots:
-            distance = np.linalg.norm(dot_positions[i] - dot_positions[j])
-            if distance < interaction_distance and dot_sizes[i] > 0 and dot_sizes[j] > 0:
-                interaction_counter += 1
-                    
-                # Play the game if both dots have sizes greater than 0
-                cooperate_i = (dot_strategies[i] == 0)
-                cooperate_j = (dot_strategies[j] == 0)
-                
-                # Update dot memory
-                dot_memory[i, j] += 1
-                dot_memory[j, i] += 1
-                
-                # Adjust strategy based on past interactions
-                if dot_memory[i, j] > dot_memory[j, i]:
-                    dot_strategies[i] = dot_strategies[j]
-                elif dot_memory[j, i] > dot_memory[i, j]:
-                    dot_strategies[j] = dot_strategies[i]
-                
-                if cooperate_i and cooperate_j:
-                    dot_sizes[i] += 3
-                    dot_sizes[j] += 3
-                    print(f"Dot {i+1} and Dot {j+1} cooperated!")
-                elif cooperate_i and not cooperate_j:
-                    dot_sizes[i] -= 2
-                    dot_sizes[j] += 5
-                    print(f"Dot {i+1} cooperated but Dot {j+1} defected")
-                elif not cooperate_i and cooperate_j:
-                    dot_sizes[i] += 5
-                    dot_sizes[j] -= 2
-                    print(f"Dot {i+1} defected when Dot {j+1} cooperated")
-                else:  # Both defect
-                    dot_sizes[i] -= 5
-                    dot_sizes[j] -= 5
-                    print(f"Dot {i+1} and Dot {j+1} defected!")
-                        
-                # Ensure dot sizes don't go below 0
-                dot_sizes = np.maximum(dot_sizes, 0)
+    def play(self, opponent_cooperate):
+        return self.cooperate
 
-                # Check for high market share, implements Antitrust Scrutiny policy if true
-                if dot_sizes[i] >= 0.25 * sum(dot_sizes):
-                    # Reduce the dot's size by half
-                    dot_sizes[i] //= 2
-                    # Redistribute the reduced value to all other dots equally
-                    redistributed_value = dot_sizes[i] // (num_dots - 1)
-                    dot_sizes += redistributed_value
-                    print(f"Dot {i+1} got its size redistributed!")
+    def update(self, opponent_cooperate):
+        if opponent_cooperate:
+            self.cooperate = not self.cooperate
 
-                if dot_sizes[j] >= 0.25 * sum(dot_sizes):
-                    # Reduce the dot's size by half
-                    dot_sizes[j] //= 2
-                    # Redistribute the reduced value to all other dots equally
-                    redistributed_value = dot_sizes[j] // (num_dots - 1)
-                    dot_sizes += redistributed_value
-                    print(f"Dot {j+1} got its size redistributed!")
+class FictitiousPlay:
+    def __init__(self):
+        self.cooperate_count = 0
+        self.defect_count = 0
 
-                if dot_sizes[i] >= 2 * dot_sizes[j]:
-                    # Dot i's size is at least twice as big as dot j's size
-                    dot_sizes[i] += dot_sizes[j]
-                    print(f"Dot {i+1} gained {dot_sizes[j]} from Dot {j+1}!")
-                    dot_sizes[j] = 0  # Set dot j's size to 0 after adding its value to dot i
-                elif dot_sizes[j] >= 2 * dot_sizes[i]:
-                    # Dot j's size is at least twice as big as dot i's size
-                    dot_sizes[j] += dot_sizes[i]
-                    print(f"Dot {j+1} gained {dot_sizes[i]} from Dot {i+1}!")
-                    dot_sizes[i] = 0  # Set dot i's size to 0 after adding its value to dot j
-                else:
-                    # Neither dot's size is twice as big as the other's size
-                    pass  # No action needed
-                    
-                # Check if a dot's size reaches 0
-                if dot_sizes[i] == 0:
-                    # Remove dot from legend if it reaches 0 size
-                    legend_elements.pop(i)
-                    # Update dot positions, sizes, strategies, and memory to remove dot
-                    dot_positions = np.delete(dot_positions, i, axis=0)
-                    dot_sizes = np.delete(dot_sizes, i)
-                    dot_strategies = np.delete(dot_strategies, i)
-                    dot_memory = np.delete(dot_memory, i, axis=0)
-                    dot_memory = np.delete(dot_memory, i, axis=1)
-                    num_dots -= 1  # Update the number of dots
-                    print(f"Dot {i+1} has disappeared!")
-                    continue  # Skip to the next iteration since dot i has been removed
-                    
-                if dot_sizes[j] == 0:
-                    # Remove dot from legend if it reaches 0 size
-                    legend_elements.pop(j)
-                    # Update dot positions, sizes, strategies, and memory to remove dot
-                    dot_positions = np.delete(dot_positions, j, axis=0)
-                    dot_sizes = np.delete(dot_sizes, j)
-                    dot_strategies = np.delete(dot_strategies, j)
-                    dot_memory = np.delete(dot_memory, j, axis=0)
-                    dot_memory = np.delete(dot_memory, j, axis=1)
-                    num_dots -= 1  # Update the number of dots
-                    print(f"Dot {j+1} has disappeared!")
-                    continue  # Skip to the next iteration since dot j has been removed
-                    
-            j += 1
-        i += 1
-                
-    # Update dot positions and sizes on the plot
-    dots.set_offsets(dot_positions)
-    dots.set_sizes(dot_sizes)
-    
-    # Update legend labels for dots
-    for handle, size, idx in zip(legend_elements[:num_dots], dot_sizes, range(1, num_dots + 1)):
-        if size > 0:
-            handle.set_label(f'Dot {idx}: Size {size}')
+    def play(self):
+        return self.cooperate_count > self.defect_count
+
+    def update(self, opponent_cooperate):
+        if opponent_cooperate:
+            self.cooperate_count += 1
         else:
-            handle.set_label('Defeated')
+            self.defect_count += 1
+
+class QLearning:
+    def __init__(self, learning_rate=0.1, discount_factor=0.9):
+        self.learning_rate = learning_rate
+        self.discount_factor = discount_factor
+        self.q_table = {}
+
+    def play(self, state):
+        if state not in self.q_table:
+            self.q_table[state] = 0.5  # Initial value for unknown states
+        return random.random() < self.q_table[state]
+
+    def update(self, state, reward, next_state):
+        if state not in self.q_table:
+            self.q_table[state] = 0.5  # Initial value for unknown states
+        if next_state not in self.q_table:
+            self.q_table[next_state] = 0.5  # Initial value for unknown states
+        max_next_q = max(self.q_table[next_state], 0.5)  # Assume unknown states have value of 0.5
+        self.q_table[state] += self.learning_rate * (reward + self.discount_factor * max_next_q - self.q_table[state])
+
+class DotSimulation:
+    def __init__(self, num_dots=4, box_size=3, speed=0.1, interaction_distance=0.3, new_dot_probability=0.05):
+        self.num_dots = num_dots
+        self.box_size = box_size
+        self.speed = speed
+        self.interaction_distance = interaction_distance
+        self.new_dot_probability = new_dot_probability
         
-    # Update legend elements for interactions
-    legend_elements[-3].set_label(f'Interactions: {interaction_counter}')
-    legend_elements[-2].set_label(f'Iterations: {iteration_counter}')
-    legend_elements[-1].set_label(f'Total Value: {sum(dot_sizes)}')
+        # Initialize dot attributes
+        self.dot_sizes = np.random.randint(10, 25, size=num_dots)
+        self.dot_positions = np.random.rand(num_dots, 2) * box_size
+        self.dot_strategies = np.random.choice([0, 1], size=num_dots)
+        self.dot_memory = np.zeros((num_dots, num_dots))
+        self.interaction_counter = 0
+        self.iteration_counter = 0
+        self.dot_colors = np.random.rand(num_dots, 3)
 
-    # Update legend
-    legend = ax.legend(handles=legend_elements, loc='upper left', title='Dot Legend')
+        # Initialize variables for tracking dot numbers and defeated dots
+        self.next_dot_number = num_dots + 1
+        self.defeated_dot_indices = set()
 
-    return dots, legend
+        # Initialize the plot
+        self.fig, self.ax = plt.subplots()
+        self.ax.set_xlim(0, box_size)
+        self.ax.set_ylim(0, box_size)
+        self.dots = self.ax.scatter(self.dot_positions[:, 0], self.dot_positions[:, 1], c=self.dot_colors)
+        
+        # Initialize legend
+        self.legend_elements = []
+        self.update_legend()
+        self.legend = self.ax.legend(handles=self.legend_elements, loc='upper left', title='Dot Legend')
+        
+        # Initialize animation
+        self.ani = FuncAnimation(self.fig, self.update, frames=range(100), blit=True, interval=50)
 
-# Create animation
-ani = FuncAnimation(fig, update, frames=range(100), blit=True, interval=50)
+        # Define a dictionary to map strategy numbers to their names
+        self.strategy_names = {
+            0: 'Pavlov',
+            1: 'Random',
+            2: 'Tit-for-Tat',
+            3: 'Fictitious Play',
+            4: 'Q-Learning'
+        }
+
+        self.dot_strategies = np.random.choice(list(self.strategy_names.keys()), size=num_dots)
+
+        # Connect close_event method to close event
+        self.fig.canvas.mpl_connect('close_event', self.close_event)
+
+    def remove_defeated_dots(self):
+        for idx in list(self.defeated_dot_indices):  # Use list() to avoid changing set size during iteration
+            dot_label = f'Dot {idx + 1}: Size {self.dot_sizes[idx]}' if self.dot_sizes[idx] > 0 else 'Defeated'
+            dot_index = next((i for i, handle in enumerate(self.legend_elements) if handle.get_label() == dot_label), None)
+            if dot_index is not None:
+                self.legend_elements.pop(dot_index)
+                logging.info(f"Dot {idx+1} remains defeated.")
+                self.defeated_dot_indices.remove(idx)  # Remove dot from defeated indices set
+            else:
+                logging.warning(f"Dot {idx+1} not found in legend elements.")
+                # Remove the dot from defeated indices if it's not found in legend elements
+                self.defeated_dot_indices.remove(idx)
+
+    def update_legend(self):
+        legend_elements = []
+        for i in range(self.num_dots):
+            size = self.dot_sizes[i]
+            if size > 0:
+                legend_elements.append(Line2D([0], [0], marker='o', color='w', label=f'Dot {i+1}: Size {size}', markerfacecolor=self.dot_colors[i]))
+            else:
+                legend_elements.append(Line2D([0], [0], marker='o', color='w', label=f'Dot {i+1}: Defeated', markerfacecolor='black', markersize=5))
+        
+        # Add legend elements for interactions, iterations, and total value
+        legend_elements.append(Line2D([0], [0], color='w', lw=1, label=f'Interactions: {self.interaction_counter}'))
+        legend_elements.append(Line2D([0], [0], color='w', lw=1, label=f'Iterations: {self.iteration_counter}'))
+        legend_elements.append(Line2D([0], [0], color='w', lw=1, label=f'Total Value: {sum(self.dot_sizes)}'))
+
+        self.legend_elements = legend_elements
+        self.legend = self.ax.legend(handles=legend_elements, loc='upper left', title='Dot Legend')
+
+    def update(self, frame):
+        self.iteration_counter += 1
+        
+        # Check if a new dot spawns
+        if np.random.rand() < self.new_dot_probability:
+            if self.num_dots < 10:
+                self.num_dots += 1
+                new_dot_size = np.random.randint(10, 25)
+                self.dot_sizes = np.append(self.dot_sizes, new_dot_size)
+                self.dot_colors = np.vstack([self.dot_colors, np.random.rand(1, 3)])
+                self.dot_strategies = np.append(self.dot_strategies, np.random.choice([0, 1]))
+                self.dot_memory = np.pad(self.dot_memory, ((0, 1), (0, 1)), mode='constant')  # Expand dot_memory
+                new_dot_position = np.random.rand(1, 2) * self.box_size
+                self.dot_positions = np.vstack([self.dot_positions, new_dot_position])
+            logging.info(f"Dot {self.next_dot_number} has been added.")
+            self.next_dot_number += 1
+
+        self.remove_defeated_dots()
+
+        # Check if a dot has been defeated and add a new dot in the next iteration
+        if self.defeated_dot_indices:
+            self.num_dots += 1
+            new_dot_size = np.random.randint(10, 25)
+            self.dot_sizes = np.append(self.dot_sizes, new_dot_size)
+            self.dot_colors = np.vstack([self.dot_colors, np.random.rand(1, 3)])
+            self.dot_strategies = np.append(self.dot_strategies, np.random.choice([0, 1]))
+            self.dot_memory = np.pad(self.dot_memory, ((0, 1), (0, 1)), mode='constant')  # Expand dot_memory
+            new_dot_position = np.random.rand(1, 2) * self.box_size
+            self.dot_positions = np.vstack([self.dot_positions, new_dot_position])
+            logging.info(f"A new dot has been added after another dot was defeated.")
+            
+            # Clear defeated dot indices after adding a new dot
+            self.defeated_dot_indices = set()
+
+        for i in range(self.num_dots):
+            self.dot_positions[i] += np.random.uniform(-self.speed, self.speed, size=2)
+            self.dot_positions[i] = np.clip(self.dot_positions[i], 0, self.box_size)
+
+        for i in range(self.num_dots):
+            for j in range(i + 1, self.num_dots):
+                distance = np.linalg.norm(self.dot_positions[i] - self.dot_positions[j])
+                if distance < self.interaction_distance and self.dot_sizes[i] > 0 and self.dot_sizes[j] > 0:
+                    self.interaction_counter += 1
+                    cooperate_i = (self.dot_strategies[i] == 0)
+                    cooperate_j = (self.dot_strategies[j] == 0)
+                    
+                    self.dot_memory[i, j] += 1
+                    self.dot_memory[j, i] += 1
+                    
+                    if self.dot_memory[i, j] > self.dot_memory[j, i]:
+                        self.dot_strategies[i] = self.dot_strategies[j]
+                    elif self.dot_memory[j, i] > self.dot_memory[i, j]:
+                        self.dot_strategies[j] = self.dot_strategies[i]
+                    
+                    if cooperate_i and cooperate_j:
+                        self.dot_sizes[i] += 3
+                        self.dot_sizes[j] += 3
+                        logger.info(f"Dot {i+1} and Dot {j+1} cooperated!")
+                    elif cooperate_i and not cooperate_j:
+                        self.dot_sizes[i] -= 2
+                        self.dot_sizes[j] += 5
+                        logger.info(f"Dot {i+1} cooperated but Dot {j+1} defected.")
+                    elif not cooperate_i and cooperate_j:
+                        self.dot_sizes[i] += 5
+                        self.dot_sizes[j] -= 2
+                        logger.info(f"Dot {i+1} defected when Dot {j+1} cooperated.")
+                    else:
+                        self.dot_sizes[i] -= 5
+                        self.dot_sizes[j] -= 5
+                        logger.info(f"Dot {i+1} and Dot {j+1} defected!")
+
+                    self.dot_sizes = np.maximum(self.dot_sizes, 0)
+                    
+                    if self.dot_sizes[i] >= 0.25 * sum(self.dot_sizes):
+                        self.dot_sizes[j] //= 2
+                        redistributed_value = self.dot_sizes[j] // (self.num_dots - 1)
+                        self.dot_sizes += redistributed_value
+                        logger.info(f"Antitrust scrutiny policy applied. Dot {j+1} got its size redistributed.")
+
+                    if self.dot_sizes[i] >= 2 * self.dot_sizes[j]:
+                        logger.info(f"Dot {i+1} consumed Dot {j+1} as it was twice as big.")
+                        self.dot_sizes[j] = 0
+
+                        if np.random.rand() < 0.5 and self.dot_sizes[j] <= 0:
+                            recovered_amount = np.random.randint(10, 25)  # Random amount of recovery
+                            self.dot_sizes[j] = recovered_amount
+                            logging.info(f"The Government has bailed Dot {j+1} with size {recovered_amount}.") # Skip spawning a new dot if this dot recovers
+                        else:
+                            self.skip_new_dot_spawn = True
+                            self.defeated_dot_indices.add(j)
+
+                    elif self.dot_sizes[j] >= 2 * self.dot_sizes[i]:
+                        logger.info(f"Dot {j+1} consumed Dot {i+1} as it was twice as big.")
+                        self.dot_sizes[i] = 0
+                        self.defeated_dot_indices.add(i)
+
+                        if np.random.rand() < 0.5 and self.dot_sizes[i] <= 0:
+                            recovered_amount = np.random.randint(10, 25)  # Random amount of recovery
+                            self.dot_sizes[i] = recovered_amount
+                            logging.info(f"The Government has bailed Dot {i+1} with size {recovered_amount}.") # Skip spawning a new dot if this dot recovers
+                        else:
+                            self.skip_new_dot_spawn = True
+
+        self.dots.set_offsets(self.dot_positions)
+        self.dots.set_sizes(self.dot_sizes)
+
+        self.update_legend()
+        self.legend = self.ax.legend(handles=self.legend_elements, loc='upper left', title='Dot Legend')
+
+        return self.dots, self.legend
+
+    def gather_strategies(self):
+        dot_strategies = {}
+        for i in range(self.num_dots):
+            dot_strategies[f"Dot {i+1}"] = self.strategy_names.get(self.dot_strategies[i], 'Unknown Strategy')
+        return dot_strategies
+
+    def close_event(self, event):
+        plt.close(self.fig)
+        strategies = self.gather_strategies()
+        print("Dot Strategies:")
+        for dot, strategy in strategies.items():
+            print(f"{dot}: {strategy}")
+
+class YourClass:
+    def __init__(self):
+        # Initialize other attributes
+        self.num_dots = 0
+        self.dot_learning_algorithms = []
+
+    def assign_learning_algorithms(self):
+        # Define a list of available learning algorithms based on game theory principles
+        learning_algorithms = ['Tit-for-Tat', 'Random', 'Pavlov', 'Fictitious Play', 'Q-Learning']
+        
+        # Assign a learning algorithm to each dot
+        self.dot_learning_algorithms = [random.choice(learning_algorithms) for _ in range(self.num_dots)]
+
+# Instantiate YourClass
+your_instance = YourClass()
+
+# Set the number of dots
+your_instance.num_dots = 20 
+
+# Assign learning algorithms to dots
+your_instance.assign_learning_algorithms()
+
+# Access the learning algorithms assigned to dots
+print(your_instance.dot_learning_algorithms)
+
+# Set up logging configuration
+logging.basicConfig(level=logging.INFO)
+
+# Create DotSimulation instance
+dot_simulation = DotSimulation()
 
 # Show the plot
 plt.show()
