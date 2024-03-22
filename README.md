@@ -1,5 +1,5 @@
 # Game-Theory-Simulation
-This is a simulation of basic game theory principles in Python. A future idea will change the "dot" syntax to "player". Additionally, more featurse will be added in accordance to realistic game theory mechanics.
+This is a simulation of basic game theory principles in Python. Future ideas will attempt to include more featurse in accordance to realistic game theory mechanics.
 
 This simulation is a graphical representation to aid those who want to understand game theory. In this simulation, dots are considered players, where they interact with each other as they move around the chart in a random manner. As these dots interact, they automatically play "games" where they compete, either cooperating, defecting, or taking advantage of each other.
 
