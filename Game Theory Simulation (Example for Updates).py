@@ -23,7 +23,7 @@ class RandomPlay:
     def __init__(self):
         pass
 
-    def play(self):
+    def play(self, opponent_cooperate=None):  
         return random.choice([True, False])
 
     def update(self, opponent_cooperate):
@@ -33,7 +33,7 @@ class Pavlov:
     def __init__(self):
         self.cooperate = True
 
-    def play(self, opponent_cooperate):
+    def play(self, opponent_cooperate=None):
         return self.cooperate
 
     def update(self, opponent_cooperate):
@@ -45,7 +45,7 @@ class FictitiousPlay:
         self.cooperate_count = 0
         self.defect_count = 0
 
-    def play(self):
+    def play(self, opponent_cooperate=None):
         return self.cooperate_count > self.defect_count
 
     def update(self, opponent_cooperate):
@@ -84,7 +84,7 @@ class DotSimulation:
         # Initialize dot attributes
         self.dot_sizes = np.random.randint(10, 25, size=num_dots)
         self.dot_positions = np.random.rand(num_dots, 2) * box_size
-        self.dot_strategies = np.random.choice([0, 1], size=num_dots)
+        self.dot_strategies = [random.choice([TitForTat(), RandomPlay(), Pavlov(), FictitiousPlay(), QLearning()]) for _ in range(num_dots)]
         self.dot_memory = np.zeros((num_dots, num_dots))
         self.interaction_counter = 0
         self.iteration_counter = 0
@@ -107,20 +107,6 @@ class DotSimulation:
         
         # Initialize animation
         self.ani = FuncAnimation(self.fig, self.update, frames=range(100), blit=True, interval=50)
-
-        # Define a dictionary to map strategy numbers to their names
-        self.strategy_names = {
-            0: 'Pavlov',
-            1: 'Random',
-            2: 'Tit-for-Tat',
-            3: 'Fictitious Play',
-            4: 'Q-Learning'
-        }
-
-        self.dot_strategies = np.random.choice(list(self.strategy_names.keys()), size=num_dots)
-
-        # Connect close_event method to close event
-        self.fig.canvas.mpl_connect('close_event', self.close_event)
 
     def remove_defeated_dots(self):
         for idx in list(self.defeated_dot_indices):  # Use list() to avoid changing set size during iteration
@@ -152,6 +138,13 @@ class DotSimulation:
         self.legend_elements = legend_elements
         self.legend = self.ax.legend(handles=legend_elements, loc='upper left', title='Dot Legend')
 
+    def close_event(self, event):
+        plt.close(self.fig)
+        strategies = self.gather_strategies()
+        print("Dot Strategies:")
+        for dot, strategy in strategies.items():
+            print(f"{dot}: {strategy}")
+
     def update(self, frame):
         self.iteration_counter += 1
         
@@ -162,7 +155,7 @@ class DotSimulation:
                 new_dot_size = np.random.randint(10, 25)
                 self.dot_sizes = np.append(self.dot_sizes, new_dot_size)
                 self.dot_colors = np.vstack([self.dot_colors, np.random.rand(1, 3)])
-                self.dot_strategies = np.append(self.dot_strategies, np.random.choice([0, 1]))
+                self.dot_strategies.append(random.choice([TitForTat(), RandomPlay(), Pavlov(), FictitiousPlay(), QLearning()]))
                 self.dot_memory = np.pad(self.dot_memory, ((0, 1), (0, 1)), mode='constant')  # Expand dot_memory
                 new_dot_position = np.random.rand(1, 2) * self.box_size
                 self.dot_positions = np.vstack([self.dot_positions, new_dot_position])
@@ -177,7 +170,7 @@ class DotSimulation:
             new_dot_size = np.random.randint(10, 25)
             self.dot_sizes = np.append(self.dot_sizes, new_dot_size)
             self.dot_colors = np.vstack([self.dot_colors, np.random.rand(1, 3)])
-            self.dot_strategies = np.append(self.dot_strategies, np.random.choice([0, 1]))
+            self.dot_strategies.append(random.choice([TitForTat(), RandomPlay(), Pavlov(), FictitiousPlay(), QLearning()]))
             self.dot_memory = np.pad(self.dot_memory, ((0, 1), (0, 1)), mode='constant')  # Expand dot_memory
             new_dot_position = np.random.rand(1, 2) * self.box_size
             self.dot_positions = np.vstack([self.dot_positions, new_dot_position])
@@ -195,16 +188,11 @@ class DotSimulation:
                 distance = np.linalg.norm(self.dot_positions[i] - self.dot_positions[j])
                 if distance < self.interaction_distance and self.dot_sizes[i] > 0 and self.dot_sizes[j] > 0:
                     self.interaction_counter += 1
-                    cooperate_i = (self.dot_strategies[i] == 0)
-                    cooperate_j = (self.dot_strategies[j] == 0)
-                    
-                    self.dot_memory[i, j] += 1
-                    self.dot_memory[j, i] += 1
-                    
-                    if self.dot_memory[i, j] > self.dot_memory[j, i]:
-                        self.dot_strategies[i] = self.dot_strategies[j]
-                    elif self.dot_memory[j, i] > self.dot_memory[i, j]:
-                        self.dot_strategies[j] = self.dot_strategies[i]
+                    cooperate_i = self.dot_strategies[i].play(self.dot_memory[i, j])
+                    cooperate_j = self.dot_strategies[j].play(self.dot_memory[j, i])
+
+                    self.dot_memory[i, j] = cooperate_i
+                    self.dot_memory[j, i] = cooperate_j
                     
                     if cooperate_i and cooperate_j:
                         self.dot_sizes[i] += 3
@@ -263,43 +251,43 @@ class DotSimulation:
 
         return self.dots, self.legend
 
+class YourClass:
+    def __init__(self):
+        self.num_dots = 0
+        self.strategy_names = {
+            0: "TitForTat",
+            1: "RandomPlay",
+            2: "Pavlov",
+            3: "FictitiousPlay",
+            4: "QLearning"
+        }
+        self.dot_strategies = {}
+    
+    def assign_strategies(self):
+        available_strategies = list(self.strategy_names.keys())
+        self.dot_strategies = {f"Dot {i+1}": random.choice(available_strategies) for i in range(self.num_dots)}
+    
     def gather_strategies(self):
-        dot_strategies = {}
-        for i in range(self.num_dots):
-            dot_strategies[f"Dot {i+1}"] = self.strategy_names.get(self.dot_strategies[i], 'Unknown Strategy')
-        return dot_strategies
-
-    def close_event(self, event):
-        plt.close(self.fig)
+        return {dot: self.strategy_names.get(strategy, 'Unknown Strategy') for dot, strategy in self.dot_strategies.items()}
+    
+    def display_strategies(self):
         strategies = self.gather_strategies()
+        print(strategies)
         print("Dot Strategies:")
         for dot, strategy in strategies.items():
             print(f"{dot}: {strategy}")
-
-class YourClass:
-    def __init__(self):
-        # Initialize other attributes
-        self.num_dots = 0
-        self.dot_learning_algorithms = []
-
-    def assign_learning_algorithms(self):
-        # Define a list of available learning algorithms based on game theory principles
-        learning_algorithms = ['Tit-for-Tat', 'Random', 'Pavlov', 'Fictitious Play', 'Q-Learning']
-        
-        # Assign a learning algorithm to each dot
-        self.dot_learning_algorithms = [random.choice(learning_algorithms) for _ in range(self.num_dots)]
 
 # Instantiate YourClass
 your_instance = YourClass()
 
 # Set the number of dots
-your_instance.num_dots = 20 
+your_instance.num_dots = 1000
 
-# Assign learning algorithms to dots
-your_instance.assign_learning_algorithms()
+# Assign strategies to dots
+your_instance.assign_strategies()
 
-# Access the learning algorithms assigned to dots
-print(your_instance.dot_learning_algorithms)
+# Display the assigned strategies
+your_instance.display_strategies()
 
 # Set up logging configuration
 logging.basicConfig(level=logging.INFO)
